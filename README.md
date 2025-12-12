@@ -38,6 +38,13 @@ All three configurations use the FastMCP framework (v2.14.0) with the MCP protoc
 | **Response Status Codes** | 202 for POSTs | 200/202 | 200/202 |
 | **Response Content Type** | `text/event-stream; charset=utf-8` | `text/event-stream` | `text/event-stream` |
 | **Cache Control** | `no-store` | `no-cache, no-transform` | `no-cache, no-transform` |
+| **Sampling** | ✓ | ✗ | ✓ |
+| **Elicitation** | ✓ | ✗ | ✓ |
+| **Progress Notifications** | ✓ | ✗ | ✓ |
+| **Logging** | ✓ | ✗ | ✓ |
+| **Roots Listing** | ✓ | ✗ | ✓ |
+| **Change Notifications** | ✓ | ✗ | ✓ |
+| **Background Tasks** | ✓ | ✗ | ✓ |
 | **Best For** | Traditional SSE pattern | Microservices, serverless | Long-lived sessions |
 | **Scalability** | Good | Excellent | Good |
 | **Complexity** | Medium | Low | High |
@@ -941,6 +948,50 @@ INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e0289
 INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1" 202 Accepted
 INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1" 202 Accepted
 ```
+
+---
+
+## Features Requiring Bidirectional Communication
+
+The following MCP features require a persistent server-to-client channel and **will NOT work** in HTTP Streamable Stateless mode:
+
+1. **Sampling** - Server requests LLM completion from client
+   - Server calls `context.sample()` to request text generation from the client's LLM
+   - Requires client to receive `sampling/createMessage` requests and respond with completions
+
+2. **Elicitation** - Server prompts client for additional information
+   - Server calls `context.elicit()` to request user input or clarification
+   - Client must handle elicitation requests and return user responses
+
+3. **Progress Notifications** - Server reports task progress to client
+   - Server calls `context.report_progress()` during long-running operations
+   - Client receives `notifications/progress` messages without explicit request
+
+4. **Logging** - Server sends log messages to client
+   - Server emits log messages at various severity levels (debug, info, warning, error)
+   - Client receives `notifications/message` for logging without explicit request
+
+5. **Roots Listing** - Server queries client for available roots
+   - Server requests list of root directories/locations from client
+   - Client must respond with roots configuration
+
+6. **Change Notifications** - Server notifies client of resource/tool/prompt changes
+   - Server sends `notifications/resources/list_changed`, `notifications/tools/list_changed`, etc.
+   - Client receives updates when server's capabilities change dynamically
+
+7. **Background Tasks** - Server-initiated long-running operations with status updates
+   - Server creates and manages background tasks (SEP-1686)
+   - Client receives `TaskStatusNotification` messages as tasks progress
+
+### Why Stateless Mode Cannot Support These Features
+
+In **HTTP Streamable Stateless** mode:
+- Each HTTP connection closes immediately after the response is sent
+- No persistent channel exists for server-to-client messages
+- Server cannot initiate communication; only responds to client requests
+
+✓ **Available in**: SSE and HTTP Streamable Stateful (both maintain persistent connections)  
+✗ **Not available in**: HTTP Streamable Stateless (pure request-response pattern)
 
 ---
 
