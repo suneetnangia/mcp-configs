@@ -417,7 +417,7 @@ sequenceDiagram
     Client->>+Server: GET /mcp<br/>mcp-session-id header
     Server-->>Client: 200 OK (text/event-stream)<br/>mcp-session-id header
     
-    rect rgb(50, 50, 50)
+    rect rgba(128, 128, 128, 0.1) 
         Note right of Server: 🔄 Long-lived connection<br/>stays open for server events
         
         Note over Client,Server: 4. List Tools
@@ -702,7 +702,7 @@ sequenceDiagram
     Note over Client,Server: 1. Establish SSE Connection
     Client->>+Server: GET /sse
     Server-->>Client: 200 OK (text/event-stream)
-    rect rgb(50, 50, 50)
+    rect rgba(128, 128, 128, 0.1) 
         Note right of Server: 🔄 Long-lived connection<br/>stays open for SSE events
         Server-->>Client: SSE: endpoint URL with session_id
         
