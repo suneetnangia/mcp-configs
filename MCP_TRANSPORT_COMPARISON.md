@@ -1,6 +1,6 @@
 # MCP Transport Protocol Comparison
 
-This repo compares the HTTP messages (headers and body) across three MCP transport configurations:
+This document compares the HTTP messages (headers and body) across three MCP transport configurations:
 1. HTTP Streamable - Stateless
 2. HTTP Streamable - Stateful
 3. SSE (Server-Sent Events)
