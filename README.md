@@ -1,11 +1,13 @@
 # MCP Transport Protocol Comparison
 
 This repo compares the HTTP messages (headers and body) across three MCP transport configurations:
+
 1. HTTP Streamable - Stateless
 2. HTTP Streamable - Stateful
 3. SSE (Server-Sent Events)
 
 ## Table of Contents
+
 - [Overview](#overview)
 - [Quick Comparison](#quick-comparison)
 - [Key Differences Summary](#key-differences-summary)
@@ -18,6 +20,7 @@ This repo compares the HTTP messages (headers and body) across three MCP transpo
 ## Overview
 
 All three configurations use the FastMCP framework (v2.14.0) with the MCP protocol version `2025-11-25`. The server provides a simple `greet` tool, and the client performs the following operations:
+
 1. Initialize connection
 2. List available tools
 3. Call the `greet` tool with parameter `name='Teddy 🐶'`
@@ -75,17 +78,20 @@ All three configurations use the FastMCP framework (v2.14.0) with the MCP protoc
 ### 3. Header Differences
 
 #### SSE Transport
+
 - **Unique Headers**: `content-type: text/event-stream; charset=utf-8`, `cache-control: no-store`
 - **Session ID**: In query parameter (`?session_id=...`)
 - **Response Status**: 202 Accepted for all POST requests
 
 #### HTTP Streamable - Stateless
+
 - **Unique Headers**: `content-type: text/event-stream` (without charset), `cache-control: no-cache, no-transform`
 - **Session ID**: None (stateless)
 - **Response Status**: 200 OK for requests, 202 Accepted for notifications
 - **Content-Type**: `application/json` for 202 responses, `text/event-stream` for 200 responses
 
 #### HTTP Streamable - Stateful
+
 - **Unique Headers**: `mcp-session-id` header present in all requests/responses after initialization
 - **Session ID**: In header (`mcp-session-id: ...`)
 - **Response Status**: Same as stateless (200 OK for requests, 202 Accepted for notifications)
@@ -134,6 +140,7 @@ The **SSE transport** returns more extensive capabilities in the initialize resp
 ```
 
 While **HTTP Streamable** (both modes) returns minimal capabilities:
+
 ```json
 {
   "experimental": {}
@@ -155,6 +162,7 @@ While **HTTP Streamable** (both modes) returns minimal capabilities:
 ## 1. HTTP Streamable - Stateless
 
 ### Server Configuration
+
 - **Mode**: Stateless
 - **Transport**: HTTP Streamable
 - **Endpoint**: `http://127.0.0.1:8000/mcp`
@@ -191,207 +199,14 @@ sequenceDiagram
 
 ### HTTP Messages
 
-#### 2.1 Initialize Request (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 0,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2025-11-25",
-    "capabilities": {
-      "experimental": {
-        "tasks": {}
-      }
-    },
-    "clientInfo": {
-      "name": "mcp",
-      "version": "0.1.0"
-    }
-  }
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:41:31 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-**SSE Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": "2025-11-25",
-    "capabilities": {
-      "experimental": {},
-      "prompts": {"listChanged": true},
-      "resources": {"subscribe": false, "listChanged": true},
-      "tools": {"listChanged": true}
-    },
-    "serverInfo": {
-      "name": "My MCP Server",
-      "version": "2.14.0"
-    }
-  }
-}
-```
-
-#### 2.2 Initialized Notification (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "method": "notifications/initialized",
-  "params": null
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 202 Accepted
-date: Fri, 12 Dec 2025 13:41:31 GMT
-server: uvicorn
-content-type: application/json
-content-length: 0
-```
-
-#### 2.3 List Tools Request (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list",
-  "params": null
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:41:31 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-**SSE Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "tools": [
-      {
-        "name": "greet",
-        "description": "Greets a person by name with a friendly hello message.\n\nArgs:\n    name: The name of the person to greet\n\nReturns:\n    A personalized greeting message",
-        "inputSchema": {
-          "properties": {"name": {"type": "string"}},
-          "required": ["name"],
-          "type": "object"
-        },
-        "outputSchema": {
-          "properties": {"result": {"type": "string"}},
-          "required": ["result"],
-          "type": "object",
-          "x-fastmcp-wrap-result": true
-        },
-        "_meta": {"_fastmcp": {"tags": []}}
-      }
-    ]
-  }
-}
-```
-
-#### 2.4 Call Tool Request (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/call",
-  "params": {
-    "name": "greet",
-    "arguments": {"name": "Teddy 🐶"},
-    "_meta": {"progressToken": 2}
-  }
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:41:31 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-**SSE Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "Hello, Teddy 🐶 from MCP server!"
-      }
-    ],
-    "structuredContent": {
-      "result": "Hello, Teddy 🐶 from MCP server!"
-    },
-    "isError": false
-  }
-}
-```
-
-### Server Logs
-```
-INFO:     127.0.0.1:36210 - "POST /mcp HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36224 - "POST /mcp HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:36226 - "POST /mcp HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36232 - "POST /mcp HTTP/1.1" 200 OK
-```
+See [HTTP Streamable - Stateless: HTTP Messages](docs/http-stateless-messages.md) for detailed request/response examples and server logs.
 
 ---
 
 ## 2. HTTP Streamable - Stateful
 
 ### Server Configuration
+
 - **Mode**: Stateful
 - **Transport**: HTTP Streamable
 - **Endpoint**: `http://127.0.0.1:8000/mcp`
@@ -439,255 +254,14 @@ sequenceDiagram
 
 ### HTTP Messages
 
-#### 3.1 Initialize Request (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 0,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2025-11-25",
-    "capabilities": {
-      "experimental": {
-        "tasks": {}
-      }
-    },
-    "clientInfo": {
-      "name": "mcp",
-      "version": "0.1.0"
-    }
-  }
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:42:01 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-**SSE Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": "2025-11-25",
-    "capabilities": {
-      "experimental": {},
-      "prompts": {"listChanged": true},
-      "resources": {"subscribe": false, "listChanged": true},
-      "tools": {"listChanged": true}
-    },
-    "serverInfo": {
-      "name": "My MCP Server",
-      "version": "2.14.0"
-    }
-  }
-}
-```
-
-#### 3.2 Initialized Notification (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-
-{
-  "jsonrpc": "2.0",
-  "method": "notifications/initialized",
-  "params": null
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 202 Accepted
-date: Fri, 12 Dec 2025 13:42:01 GMT
-server: uvicorn
-content-type: application/json
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-content-length: 0
-```
-
-#### 3.3 GET SSE Stream Connection
-**Client Request:**
-```http
-GET /mcp HTTP/1.1
-Host: localhost:8000
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:42:01 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-#### 3.4 List Tools Request (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list",
-  "params": null
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:42:01 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-**SSE Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "tools": [
-      {
-        "name": "greet",
-        "description": "Greets a person by name with a friendly hello message.\n\nArgs:\n    name: The name of the person to greet\n\nReturns:\n    A personalized greeting message",
-        "inputSchema": {
-          "properties": {"name": {"type": "string"}},
-          "required": ["name"],
-          "type": "object"
-        },
-        "outputSchema": {
-          "properties": {"result": {"type": "string"}},
-          "required": ["result"],
-          "type": "object",
-          "x-fastmcp-wrap-result": true
-        },
-        "_meta": {"_fastmcp": {"tags": []}}
-      }
-    ]
-  }
-}
-```
-
-#### 3.5 Call Tool Request (POST)
-**Client Request:**
-```http
-POST /mcp HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/call",
-  "params": {
-    "name": "greet",
-    "arguments": {"name": "Teddy 🐶"},
-    "_meta": {"progressToken": 2}
-  }
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:42:01 GMT
-server: uvicorn
-cache-control: no-cache, no-transform
-connection: keep-alive
-content-type: text/event-stream
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-x-accel-buffering: no
-transfer-encoding: chunked
-```
-
-**SSE Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "Hello, Teddy 🐶 from MCP server!"
-      }
-    ],
-    "structuredContent": {
-      "result": "Hello, Teddy 🐶 from MCP server!"
-    },
-    "isError": false
-  }
-}
-```
-
-#### 3.6 Session Termination (DELETE)
-**Client Request:**
-```http
-DELETE /mcp HTTP/1.1
-Host: localhost:8000
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:42:01 GMT
-server: uvicorn
-content-type: application/json
-mcp-session-id: c1a48a90797c48f8b4ae35c399b9df3f
-content-length: 0
-```
-
-### Server Logs
-```
-INFO:     127.0.0.1:46386 - "POST /mcp HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46390 - "POST /mcp HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:46396 - "GET /mcp HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46406 - "POST /mcp HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46412 - "POST /mcp HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46420 - "DELETE /mcp HTTP/1.1" 200 OK
-```
+See [HTTP Streamable - Stateful: HTTP Messages](docs/http-stateful-messages.md) for detailed request/response examples and server logs.
 
 ---
 
 ## 3. SSE Transport
 
 ### Server Configuration
+
 - **Transport**: SSE
 - **Endpoint**: `http://127.0.0.1:8000/sse`
 - **Note**: SSE transport does not use the stateful/stateless mode configuration
@@ -730,224 +304,7 @@ sequenceDiagram
 
 ### HTTP Messages
 
-#### 3.1 Initial SSE Connection (GET)
-**Client Request:**
-```http
-GET /sse HTTP/1.1
-Host: localhost:8000
-```
-
-**Server Response:**
-```http
-HTTP/1.1 200 OK
-date: Fri, 12 Dec 2025 13:39:57 GMT
-server: uvicorn
-cache-control: no-store
-connection: keep-alive
-x-accel-buffering: no
-content-type: text/event-stream; charset=utf-8
-transfer-encoding: chunked
-```
-
-**SSE Event - Endpoint:**
-```
-event: endpoint
-data: http://localhost:8000/messages/?session_id=1beded10f1764848be4e028989c149e8
-```
-
-#### 3.2 Initialize Request (POST)
-**Client Request:**
-```http
-POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 0,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2025-11-25",
-    "capabilities": {
-      "experimental": {
-        "tasks": {}
-      }
-    },
-    "clientInfo": {
-      "name": "mcp",
-      "version": "0.1.0"
-    }
-  }
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 202 Accepted
-date: Fri, 12 Dec 2025 13:39:57 GMT
-server: uvicorn
-content-length: 8
-```
-
-**SSE Event - Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": "2025-11-25",
-    "capabilities": {
-      "experimental": {
-        "tasks": {
-          "list": {},
-          "cancel": {},
-          "requests": {
-            "tools": {"call": {}},
-            "prompts": {"get": {}},
-            "resources": {"read": {}}
-          }
-        }
-      },
-      "prompts": {"listChanged": true},
-      "resources": {"subscribe": false, "listChanged": true},
-      "tools": {"listChanged": true}
-    },
-    "serverInfo": {
-      "name": "My MCP Server",
-      "version": "2.14.0"
-    }
-  }
-}
-```
-
-#### 3.3 Initialized Notification (POST)
-**Client Request:**
-```http
-POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "method": "notifications/initialized",
-  "params": null
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 202 Accepted
-date: Fri, 12 Dec 2025 13:39:57 GMT
-server: uvicorn
-content-length: 8
-```
-
-#### 3.4 List Tools Request (POST)
-**Client Request:**
-```http
-POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list",
-  "params": null
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 202 Accepted
-date: Fri, 12 Dec 2025 13:39:57 GMT
-server: uvicorn
-content-length: 8
-```
-
-**SSE Event - Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "tools": [
-      {
-        "name": "greet",
-        "description": "Greets a person by name with a friendly hello message.\n\nArgs:\n    name: The name of the person to greet\n\nReturns:\n    A personalized greeting message",
-        "inputSchema": {
-          "properties": {"name": {"type": "string"}},
-          "required": ["name"],
-          "type": "object"
-        },
-        "outputSchema": {
-          "properties": {"result": {"type": "string"}},
-          "required": ["result"],
-          "type": "object",
-          "x-fastmcp-wrap-result": true
-        },
-        "_meta": {"_fastmcp": {"tags": []}}
-      }
-    ]
-  }
-}
-```
-
-#### 3.5 Call Tool Request (POST)
-**Client Request:**
-```http
-POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1
-Host: localhost:8000
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/call",
-  "params": {
-    "name": "greet",
-    "arguments": {"name": "Teddy 🐶"},
-    "_meta": {"progressToken": 2}
-  }
-}
-```
-
-**Server Response:**
-```http
-HTTP/1.1 202 Accepted
-date: Fri, 12 Dec 2025 13:39:57 GMT
-server: uvicorn
-content-length: 8
-```
-
-**SSE Event - Message:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "Hello, Teddy 🐶 from MCP server!"
-      }
-    ],
-    "structuredContent": {
-      "result": "Hello, Teddy 🐶 from MCP server!"
-    },
-    "isError": false
-  }
-}
-```
-
-### Server Logs
-```
-INFO:     127.0.0.1:58902 - "GET /sse HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58908 - "POST /messages/?session_id=1beded10f1764848be4e028989c149e8 HTTP/1.1" 202 Accepted
-```
+See [SSE Transport: HTTP Messages](docs/sse-messages.md) for detailed request/response examples and server logs.
 
 ---
 
@@ -986,6 +343,7 @@ The following MCP features require a persistent server-to-client channel and **w
 ### Why Stateless Mode Cannot Support These Features
 
 In **HTTP Streamable Stateless** mode:
+
 - Each HTTP connection closes immediately after the response is sent
 - No persistent channel exists for server-to-client messages
 - Server cannot initiate communication; only responds to client requests
