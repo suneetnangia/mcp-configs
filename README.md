@@ -4,13 +4,12 @@ This repo compares the HTTP messages (headers and body) across three MCP transpo
 
 1. HTTP Streamable - Stateless
 2. HTTP Streamable - Stateful
-3. SSE (Server-Sent Events)
+3. SSE (Server-Sent Events (Deprecated since 2025-03-26 version))
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Quick Comparison](#quick-comparison)
-- [Key Differences Summary](#key-differences-summary)
 - [1. HTTP Streamable - Stateless](#1-http-streamable---stateless)
 - [2. HTTP Streamable - Stateful](#2-http-streamable---stateful)
 - [3. SSE Transport](#3-sse-transport)
@@ -29,131 +28,28 @@ All three configurations use the FastMCP framework (v2.14.0) with the MCP protoc
 
 ## Quick Comparison
 
-| Feature | SSE | HTTP Streamable (Stateless) | HTTP Streamable (Stateful) |
-|---------|-----|----------------------------|---------------------------|
-| **Endpoint** | `/sse` | `/mcp` | `/mcp` |
-| **Session Management** | Query parameter | None | Header (`mcp-session-id`) |
-| **Long-lived Connection** | ✓ (GET /sse) | ✗ | ✓ (GET /mcp) |
-| **Initial Request** | GET | POST | POST |
-| **Message Endpoint** | `/messages/?session_id=...` | Same (`/mcp`) | Same (`/mcp`) |
-| **Session Cleanup** | Implicit | N/A | Explicit (DELETE) |
-| **Total HTTP Requests** | 5 (1 GET + 4 POST) | 4 (4 POST) | 6 (1 POST + 1 GET + 3 POST + 1 DELETE) |
-| **Response Status Codes** | 202 for POSTs | 200/202 | 200/202 |
-| **Response Content Type** | `text/event-stream; charset=utf-8` | `text/event-stream` | `text/event-stream` |
-| **Cache Control** | `no-store` | `no-cache, no-transform` | `no-cache, no-transform` |
-| **Sampling** | ✓ | ✗ | ✓ |
-| **Elicitation** | ✓ | ✗ | ✓ |
-| **Progress Notifications** | ✓ | ✗ | ✓ |
-| **Logging** | ✓ | ✗ | ✓ |
-| **Roots Listing** | ✓ | ✗ | ✓ |
-| **Change Notifications** | ✓ | ✗ | ✓ |
-| **Background Tasks** | ✓ | ✗ | ✓ |
-| **Best For** | Traditional SSE pattern | Microservices, serverless | Long-lived sessions |
-| **Scalability** | Good | Excellent | Good |
-| **Complexity** | Medium | Low | High |
-
----
-
-## Key Differences Summary
-
-### 1. Connection Pattern
-
-| Feature | SSE | HTTP Stateless | HTTP Stateful |
-|---------|-----|----------------|---------------|
-| **Initial Connection** | GET /sse | POST /mcp | POST /mcp |
-| **Endpoint Discovery** | Via SSE event | Direct to /mcp | Direct to /mcp |
-| **Message Endpoint** | /messages/?session_id=... | /mcp | /mcp |
-| **Session Management** | Query parameter | None | mcp-session-id header |
-| **GET Stream** | ✓ (initial) | ✗ | ✓ (persistent) |
-| **Session Cleanup** | Implicit | N/A | DELETE /mcp |
-
-### 2. HTTP Methods Usage
-
-| Transport | GET | POST | DELETE |
-|-----------|-----|------|--------|
-| **SSE** | 1x (initial SSE) | 4x (all messages) | 0 |
-| **HTTP Stateless** | 0 | 4x (all operations) | 0 |
-| **HTTP Stateful** | 1x (SSE stream) | 4x (messages) | 1x (cleanup) |
-
-### 3. Header Differences
-
-#### SSE Transport
-
-- **Unique Headers**: `content-type: text/event-stream; charset=utf-8`, `cache-control: no-store`
-- **Session ID**: In query parameter (`?session_id=...`)
-- **Response Status**: 202 Accepted for all POST requests
-
-#### HTTP Streamable - Stateless
-
-- **Unique Headers**: `content-type: text/event-stream` (without charset), `cache-control: no-cache, no-transform`
-- **Session ID**: None (stateless)
-- **Response Status**: 200 OK for requests, 202 Accepted for notifications
-- **Content-Type**: `application/json` for 202 responses, `text/event-stream` for 200 responses
-
-#### HTTP Streamable - Stateful
-
-- **Unique Headers**: `mcp-session-id` header present in all requests/responses after initialization
-- **Session ID**: In header (`mcp-session-id: ...`)
-- **Response Status**: Same as stateless (200 OK for requests, 202 Accepted for notifications)
-- **Additional Request**: GET /mcp for persistent SSE stream
-- **Cleanup**: DELETE /mcp to terminate session
-
-### 4. Response Patterns
-
-| Operation | SSE | HTTP Stateless | HTTP Stateful |
-|-----------|-----|----------------|---------------|
-| **Initialize** | 202 → SSE message | 200 + SSE stream | 200 + SSE stream + session ID |
-| **Notification** | 202 | 202 | 202 |
-| **Request** | 202 → SSE message | 200 + SSE stream | 200 + SSE stream |
-| **Stream** | Initial GET only | Per-request stream | Persistent GET stream |
-
-### 5. State Management
-
-- **SSE**: Session ID in URL query parameter, separate endpoint for messages
-- **Stateless HTTP**: No session management, each request is independent
-- **Stateful HTTP**: Session ID in header, persistent connection via GET, explicit cleanup
-
-### 6. Connection Efficiency
-
-- **SSE**: 1 persistent GET + 4 POST requests = **5 HTTP requests**
-- **HTTP Stateless**: 4 POST requests = **4 HTTP requests**
-- **HTTP Stateful**: 1 POST + 1 GET (persistent) + 3 POST + 1 DELETE = **6 HTTP requests**
-
-### 7. Capabilities Differences
-
-The **SSE transport** returns more extensive capabilities in the initialize response:
-
-```json
-{
-  "experimental": {
-    "tasks": {
-      "list": {},
-      "cancel": {},
-      "requests": {
-        "tools": {"call": {}},
-        "prompts": {"get": {}},
-        "resources": {"read": {}}
-      }
-    }
-  }
-}
-```
-
-While **HTTP Streamable** (both modes) returns minimal capabilities:
-
-```json
-{
-  "experimental": {}
-}
-```
-
-### 8. Use Case Recommendations
-
-| Transport | Best For | Considerations |
-|-----------|----------|----------------|
-| **SSE** | Traditional browser-based applications | Separate GET for events, POST for commands; well-established pattern |
-| **HTTP Stateless** | Microservices, serverless, load-balanced | Simplest, most scalable; no state to manage |
-| **HTTP Stateful** | Long-lived connections, complex interactions | Most efficient for persistent sessions; requires session cleanup |
+| Feature | HTTP Streamable (Stateless) | HTTP Streamable (Stateful) | SSE |
+|---------|----------------------------|---------------------------|-----|
+| **Endpoint** | `/mcp` | `/mcp` | `/sse` |
+| **Session Management** | None | Header (`mcp-session-id`) | Query parameter |
+| **Long-lived Connection** | ✗ | ✓ (GET /mcp) | ✓ (GET /sse) |
+| **Initial Request** | POST | POST | GET |
+| **Message Endpoint** | Same (`/mcp`) | Same (`/mcp`) | `/messages/?session_id=...` |
+| **Session Cleanup** | N/A | Explicit (DELETE) | Implicit |
+| **Total HTTP Requests** | 4 (4 POST) | 6 (1 POST + 1 GET + 3 POST + 1 DELETE) | 5 (1 GET + 4 POST) |
+| **Response Status Codes** | 200/202 | 200/202 | 202 for POSTs |
+| **Response Content Type** | `text/event-stream` | `text/event-stream` | `text/event-stream; charset=utf-8` |
+| **Cache Control** | `no-cache, no-transform` | `no-cache, no-transform` | `no-store` |
+| **Sampling** | ✗ | ✓ | ✓ |
+| **Elicitation** | ✗ | ✓ | ✓ |
+| **Progress Notifications** | ✗ | ✓ | ✓ |
+| **Logging** | ✗ | ✓ | ✓ |
+| **Roots Listing** | ✗ | ✓ | ✓ |
+| **Change Notifications** | ✗ | ✓ | ✓ |
+| **Background Tasks** | ✗ | ✓ | ✓ |
+| **Best For** | Microservices, serverless | Long-lived sessions | Traditional SSE pattern |
+| **Scalability** | Excellent | Good | Good |
+| **Complexity** | Low | High | Medium |
 
 ---
 
